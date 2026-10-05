@@ -1,8 +1,8 @@
-/** Tiny DOM helpers shared by every module. */
+/** Tiny DOM helpers shared by every module */
 
 /**
  * h('button.btn.primary', { onclick, title: 'x' }, 'Label', childNode)
- * Tag may carry #id and .classes. Attributes starting with "on" become listeners.
+ * Tag may carry #id and .classes; Attributes starting with "on" become listeners
  */
 export function h(spec, attrs = {}, ...children) {
   const [, tag = 'div', rest = ''] = spec.match(/^([a-z0-9-]*)(.*)$/i);
@@ -30,7 +30,7 @@ export function h(spec, attrs = {}, ...children) {
 }
 
 const SVG_NS = 'http://www.w3.org/2000/svg';
-/** svg('circle', { r: 4 }) — namespaced element creation. */
+/** svg('circle', { r: 4 }) - namespaced element creation */
 export function svg(tag, attrs = {}, ...children) {
   const el = document.createElementNS(SVG_NS, tag);
   for (const [k, v] of Object.entries(attrs)) if (v !== undefined && v !== null) el.setAttribute(k, v);
@@ -38,7 +38,7 @@ export function svg(tag, attrs = {}, ...children) {
   return el;
 }
 
-/** Line icons (24×24, stroke-based). Static markup only. */
+/** Line icons (24×24, stroke-based); Static markup only */
 const ICONS = {
   topology: '<circle cx="6" cy="6" r="2.5"/><circle cx="18" cy="6" r="2.5"/><circle cx="12" cy="18" r="2.5"/><path d="M8.5 6h7M7.3 8.2l3.4 7.6M16.7 8.2l-3.4 7.6"/>',
   vm: '<rect x="3" y="4" width="18" height="12" rx="2"/><path d="M8 20h8M12 16v4M7 8h4M7 11h7"/>',
@@ -69,6 +69,10 @@ const ICONS = {
   keyboard: '<rect x="2.5" y="6" width="19" height="12" rx="2"/><path d="M6 10h.01M10 10h.01M14 10h.01M18 10h.01M7 14h10"/>',
   more: '<circle cx="5" cy="12" r="1.2"/><circle cx="12" cy="12" r="1.2"/><circle cx="19" cy="12" r="1.2"/>',
   check: '<path d="M5 12.5l4.5 4.5L19 7"/>',
+  download: '<path d="M12 4v11M7.5 10.5L12 15l4.5-4.5M5 19h14"/>',
+  upload: '<path d="M12 15V4M7.5 8.5L12 4l4.5 4.5M5 19h14"/>',
+  script: '<path d="M7 4h8l4 4v12H7z"/><path d="M15 4v4h4M10 12l2 2-2 2M13.5 16H16"/>',
+  stop: '<rect x="7" y="7" width="10" height="10" rx="1.5"/>',
 };
 export function icon(name, cls = '') {
   const span = document.createElement('span');
@@ -87,7 +91,7 @@ export function toast(message, kind = 'info', ms = 4500) {
   setTimeout(() => { el.classList.remove('in'); setTimeout(() => el.remove(), 250); }, ms);
 }
 
-/** localStorage that never throws (private windows, blocked storage…). */
+/** localStorage that never throws (private windows, blocked storage…) */
 export const prefs = {
   get(key, fallback) {
     try { const v = localStorage.getItem(`labconsole.${key}`); return v === null ? fallback : JSON.parse(v); } catch { return fallback; }

@@ -15,8 +15,10 @@
  * Events:  'data' (Buffer) · 'status' ({phase, message}) · 'close' ({reason, code})
  */
 import { EventEmitter } from 'node:events';
+import { StringDecoder } from 'node:string_decoder';
 import { Client } from 'ssh2';
 import { sshConnectOptions, describeSshError } from '../../lib/ssh.js';
+import { CliAutomation } from '../../lib/cliAutomation.js';
 
 const TELNET_ESCAPE = '\x1d'; // Ctrl+]
 const HOST_RE = /^(?:\d{1,3}(?:\.\d{1,3}){3}|[a-zA-Z0-9](?:[a-zA-Z0-9.-]{0,251}[a-zA-Z0-9])?)$/;
@@ -45,6 +47,12 @@ export class ConsoleSession extends EventEmitter {
     this.telnet = telnet;
     this.log = logger;
     this.lastActivity = Date.now();
+    // Export config / inject script; Its writes bypass write()'s lock
+    this.cli = new CliAutomation({
+      write: (text) => { this.lastActivity = Date.now(); this.#stream?.write(text); },
+      onStart: () => { this.#nudge?.cancel(); this.#autoLogin?.cancel(); },
+    });
+    this.decoder = new StringDecoder('utf8'); // multi-byte characters split across chunks stay intact
   }
 
   start() {
@@ -78,6 +86,9 @@ export class ConsoleSession extends EventEmitter {
   /** Keystrokes from the browser */
   write(data) {
     if (!this.#stream || typeof data !== 'string') return;
+    // While an export or a script runs, the student's keys are held back so
+    // they can't interleave with the automated commands
+    if (this.cli.running) return;
     this.lastActivity = Date.now();
     this.#nudge?.cancel(); // the student is driving now: never inject keys behind their back
     // Typing real characters means the student is answering prompts themselves:
@@ -130,6 +141,7 @@ export class ConsoleSession extends EventEmitter {
     // Auto-login first: if it answers a prompt, the nudge sees that prompt too and stands down
     this.#autoLogin?.feed(text);
     this.#nudge?.feed(text);
+    this.cli.feed(this.decoder.write(buf));
   }
 
   #status(phase, message) {

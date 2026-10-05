@@ -21,6 +21,7 @@ import { LabRegistry } from './labRegistry.js';
 import { SessionManager } from './sessionManager.js';
 import { ConsoleSession } from './consoleSession.js';
 import { isOriginAllowed, createRateLimiter, clientIp } from '../../lib/security.js';
+import { createAutomationHandler } from '../../lib/automationProtocol.js';
 
 export function createConsolesModule({ config, events, logger, infra }) {
   const log = logger.child('consoles');
@@ -103,14 +104,19 @@ export function createConsolesModule({ config, events, logger, infra }) {
     session.on('data', (buf) => ws.readyState === ws.OPEN && ws.send(buf, { binary: true }));
     session.on('status', (s) => send({ type: 'status', ...s }));
     session.on('close', ({ reason }) => {
+      session.cli.cancel();
       send({ type: 'exit', message: reason });
       ws.close(1000, 'session ended');
     });
+
+    // Export config / inject script: every console here is a Cisco-style device
+    const automation = createAutomationHandler({ cli: session.cli, send, canExport: true, log, label: `${device.labName}/${device.name}` });
 
     ws.on('message', (raw, isBinary) => {
       if (isBinary) return;
       let msg;
       try { msg = JSON.parse(raw.toString()); } catch { return; }
+      if (automation(msg)) return;
       if (msg.type === 'input') session.write(msg.data);
       else if (msg.type === 'resize') session.resize(Number(msg.cols), Number(msg.rows));
       else if (msg.type === 'break') session.sendBreak();

@@ -515,6 +515,65 @@ tr[data-status="running"] .vm-led { background: var(--led-green); box-shadow: 0 
 .form-actions { display: flex; justify-content: flex-end; gap: 8px; padding-top: 4px; }
 
 
+/* ── v1.1: console automation (export config / inject script) ───────────── */
+.pane-task {
+  flex: none; padding: 7px 10px 7px 12px;
+  background: #1A2A38; color: #DCE4EB; font-size: 12.5px;
+  border-bottom: 1px solid rgba(255, 255, 255, .06);
+}
+.task-row { display: flex; align-items: center; gap: 10px; min-height: 26px; }
+.task-lead { display: inline-grid; place-items: center; width: 16px; flex: none; }
+.task-lead .icon { width: 16px; height: 16px; }
+.pane-task[data-state="done"] .task-lead { color: var(--led-green); }
+.pane-task[data-state="warning"] .task-lead, .pane-task[data-state="cancelled"] .task-lead { color: var(--led-amber); }
+.pane-task[data-state="error"] .task-lead { color: var(--led-red); }
+.pane-task[data-state="error"] { background: #2E1F24; }
+.task-text { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.task-note { margin-left: 10px; color: #8D9DAC; }
+.task-progress { flex: 0 0 120px; height: 5px; border-radius: 3px; background: rgba(255, 255, 255, .12); overflow: hidden; }
+.task-fill { display: block; height: 100%; width: 0; background: var(--console); transition: width .2s; }
+.pane-task .btn.small { background: transparent; border-color: #3A4A59; color: #DCE4EB; }
+.pane-task .btn.subtle { border-color: transparent; }
+.pane-task .icon-btn { color: #9AAAB8; width: 26px; height: 26px; }
+.task-errors { list-style: none; margin: 6px 0 2px 26px; padding: 0; max-height: 140px; overflow: auto; display: grid; gap: 3px; }
+.task-errors li { display: flex; gap: 10px; font-size: 12px; }
+.task-errors code { color: #F2C462; flex: none; }
+.task-errors span { font-family: var(--mono); color: #FFFFFF; }
+.task-errors em { font-style: normal; color: #FF9C94; }
+.pane[data-task="running"] .pane-body { opacity: .92; }
+.pane-actions .icon-btn:disabled { opacity: .35; cursor: not-allowed; }
+
+.script-form { gap: 10px; }
+.script-bar { display: flex; align-items: center; gap: 10px; }
+.script-file { font: 400 12px var(--mono); color: var(--ink-2); }
+.script-count { margin-left: auto; font-size: 12.5px; color: var(--ink-3); }
+.script-input {
+  height: auto; min-height: 260px; padding: 10px 12px; resize: vertical;
+  font: 400 13px/1.5 var(--mono); white-space: pre; tab-size: 2;
+}
+.script-input.drop { outline: 2px dashed var(--console); outline-offset: -4px; background: var(--console-soft); }
+.script-hint { margin: 0; font-size: 12px; }
+.script-options { margin: 0; padding: 10px 14px 12px; border: 1px solid var(--line); border-radius: 9px; display: grid; gap: 8px; }
+.script-options legend { padding: 0 6px; font-size: 12.5px; font-weight: 600; color: var(--ink-2); }
+.script-options label { font-size: 13px; }
+.script-options label.check { display: grid; grid-template-columns: auto 1fr; gap: 9px; align-items: start; }
+.script-options label.check input { margin-top: 3px; }
+.script-options label.check small { display: block; color: var(--ink-3); font-size: 12px; }
+.script-options label.inline { display: flex; align-items: center; gap: 8px; padding-left: 24px; }
+.delay-input { width: 84px; height: 30px; font-family: var(--mono); }
+
+/* ── v1.1: bulk VM power ───────────────────────────────────────────────── */
+.bulk-bar {
+  display: flex; align-items: center; gap: 8px; flex-wrap: wrap;
+  padding: 7px 10px 7px 14px; border: 1px dashed var(--line); border-radius: 9px;
+  font-size: 12.5px; color: var(--ink-3);
+}
+.bulk-bar.active { border-style: solid; border-color: var(--console); background: var(--console-soft); color: var(--console-strong); }
+.bulk-count { margin-right: auto; font-weight: 500; }
+.vm-table th.select, .vm-table td.select { width: 36px; padding-right: 0; }
+.vm-table input[type="checkbox"] { width: 16px; height: 16px; accent-color: var(--console); cursor: pointer; }
+.vm-table tr.picked td { background: color-mix(in srgb, var(--console-soft) 55%, transparent); }
+
 /* ── Small screens: stack diagram above the consoles ───────────────────── */
 @media (max-width: 900px) {
   .rail { width: 60px; }

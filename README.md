@@ -99,6 +99,60 @@ The platform has no login: anyone who can open it can use the lab consoles,
 the admin switches and the Proxmox VMs. Expose it on the lab network only, or
 behind your school's reverse proxy/SSO (set `TRUST_PROXY=true`).
 
+## Console tools (v1.1)
+
+Every text console tile has two extra buttons in its header:
+
+| Button | Where | What it does |
+|---|---|---|
+| **Export config** (download icon) | lab devices and admin switches | Saves `show running-config` as `<hostname>_running-config_<date>.txt` |
+| **Inject script** (script icon) | lab devices, admin switches, VM serial consoles | Sends a list of commands, pasted or loaded from a `.txt` file, line by line |
+
+Both run **on the server**, right next to the SSH → telnet stream
+(`src/lib/cliAutomation.js`). Browsers slow timers in background tabs to about
+one per second, so pacing done in the browser would break as soon as you
+switched tabs. While a task runs, the tile shows its progress and a **Stop**
+button, and your own keystrokes are held back so they can't mix with the
+automated commands.
+
+**Export config** (Cisco):
+1. Presses Enter to read the prompt and the hostname.
+2. Leaves configuration mode with `end` if needed.
+3. Stops if the device is in user mode (`R1>`) and asks you to `enable` first.
+4. Sends `terminal length 0`, then captures `show running-config` until `R1#` comes back.
+5. Restores `terminal length 24`.
+
+If a device ignores `terminal length`, each `--More--` is answered with a space
+instead. Syslog lines that appear during the capture are removed.
+
+**Inject script**:
+- One command per line, sent like a careful human would type them:
+  - each line is typed in 32-byte chunks, so even a long `description` never
+    overflows a small console input buffer;
+  - the next line waits for the device's prompt, or a question such as
+    `[confirm]` or `Destination filename [startup-config]?`;
+  - then a configurable delay (default 50 ms).
+- Blank lines are sent as Enter, which is how a script answers those questions.
+- Multi-line `banner motd #…#` blocks are handled.
+- Lines starting with `!` are skipped (optional).
+- Device errors (`% Invalid input…`) are listed with their script line numbers.
+  The script can optionally stop at the first one.
+
+To see why pacing matters, run the mock lab with `MOCK_SLOW_CONSOLE=1`. It
+simulates an old device: about 1 character per ms, a 64-byte input buffer, and
+40 ms per command. The unit tests show a plain paste of a 60-line script
+losing over 1,000 characters, while the paced injection gets every line
+through intact.
+
+## Bulk VM power (v1.1)
+
+In **Infra › Virtual machines**:
+- Tick VMs, or use the header checkbox to select every VM shown (the filter applies).
+- **Start selected** starts the stopped ones; **Stop selected** shuts down the
+  running ones (graceful ACPI shutdown, after a confirmation).
+- Requests go 4 at a time, and progress appears in the job list.
+- The selection survives the automatic refresh.
+
 ## Infrastructure section
 
 The **Infra** entry in the sidebar is open to everyone, like the lab consoles.
@@ -163,7 +217,8 @@ address, exactly like in the lab.
 src/
   server.js                 HTTP + WebSocket entry, mounts modules
   config.js                 .env loading and validation
-  lib/                      logger, SSE hub, security helpers, SSH options + shared SSH tunnel
+  lib/                      logger, SSE hub, security helpers, SSH options + shared SSH tunnel,
+                            CLI automation (config export, paced script injection)
   modules/
     index.js                module registry
     consoles/               lab consoles: diagram parser, registry, SSH→telnet sessions
@@ -176,7 +231,8 @@ public/
   js/shared/                workspace (shared by all sections), terminal + VNC panes, split layout
   js/modules/infra/         Infrastructure section: VMs, network dialog, admin switches
 scripts/check-diagram.js    diagram linter
-dev/mock-lab.js             fake jump server (telnet + port forwarding) + IOS consoles
+dev/mock-lab.js             fake jump server (telnet + port forwarding)
+dev/fakeIos.js              simulated Cisco IOS (paging, config memory, slow-console mode)
 dev/mock-proxmox.js         fake Proxmox VE (HTTPS, API, serial + VNC consoles)
 config/infrastructure.json  admin switches
 test/                       node:test unit tests (npm test)

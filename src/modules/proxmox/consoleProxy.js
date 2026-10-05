@@ -18,6 +18,9 @@
  *   RFB handshake + DES challenge with Proxmox itself, then offers the
  *   browser a "None" security type and splices the two streams
  */
+import { StringDecoder } from 'node:string_decoder';
+import { CliAutomation } from '../../lib/cliAutomation.js';
+import { createAutomationHandler } from '../../lib/automationProtocol.js';
 import { DESECBCipher } from '../../../node_modules/@novnc/novnc/core/crypto/des.js';
 
 // ─── Serial (termproxy ⇄ platform console protocol) ─────────────────────────
@@ -33,9 +36,15 @@ export async function bridgeSerial({ service, client, node, vmid, cols, rows, br
 
   let authed = false;
   let ended = false;
+  // Script injection works on VM serial consoles too (e.g. set a VPC's IP); export is Cisco-only
+  const toVm = (text) => upstream.send(`0:${Buffer.byteLength(text)}:${text}`);
+  const cli = new CliAutomation({ write: toVm });
+  const decoder = new StringDecoder('utf8');
+  const automation = createAutomationHandler({ cli, send, canExport: false, log, label: `VM ${t.vm.name}` });
   const end = (message) => {
     if (ended) return;
     ended = true;
+    cli.cancel();
     clearInterval(keepAlive);
     send({ type: 'exit', message });
     try { upstream.close(); } catch { /* ignore */ }
@@ -58,6 +67,7 @@ export async function bridgeSerial({ service, client, node, vmid, cols, rows, br
       upstream.send('0:1:\r');
     }
     if (buf.length && browser.readyState === browser.OPEN) browser.send(buf, { binary: true });
+    if (buf.length) cli.feed(decoder.write(buf));
   });
   upstream.resume(); // listener attached: let Proxmox's frames flow (see client.openWebSocket)
   upstream.on('close', () => end(`Serial console of ${t.vm.name} closed`));
@@ -67,8 +77,10 @@ export async function bridgeSerial({ service, client, node, vmid, cols, rows, br
     if (isBinary || !authed) return;
     let msg;
     try { msg = JSON.parse(raw.toString()); } catch { return; }
+    if (automation(msg)) return;
     if (msg.type === 'input' && typeof msg.data === 'string' && msg.data) {
-      upstream.send(`0:${Buffer.byteLength(msg.data)}:${msg.data}`);
+      if (cli.running) return; // keys are held back while a script runs
+      toVm(msg.data);
     } else if (msg.type === 'resize') {
       resize(Number(msg.cols), Number(msg.rows));
     }
