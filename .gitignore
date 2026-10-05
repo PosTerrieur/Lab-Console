@@ -1,0 +1,6 @@
+node_modules
+.env
+keys/
+*.log
+.DS_Store
+dev/.mock-certs/

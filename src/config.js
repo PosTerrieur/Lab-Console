@@ -1,0 +1,152 @@
+/**
+ * Central configuration, loaded once from environment variables (.env)
+ *
+ * Every value is validated at startup so a misconfigured deployment fails
+ * immediately with a readable message instead of failing later inside a
+ * student's terminal
+ */
+import fs from 'node:fs';
+import path from 'node:path';
+
+// Node >= 20.12 can read .env natively - no dotenv dependency needed
+try {
+  process.loadEnvFile(process.env.ENV_FILE || '.env');
+} catch (err) {
+  if (err.code !== 'ENOENT') throw err; // a missing .env is fine (vars may come from Docker)
+}
+
+const env = process.env;
+const errors = [];
+
+function str(name, fallback = '') {
+  const v = env[name];
+  return v === undefined || v.trim() === '' ? fallback : v.trim();
+}
+function required(name) {
+  const v = str(name);
+  if (!v) errors.push(`${name} is required`);
+  return v;
+}
+function int(name, fallback, { min = -Infinity, max = Infinity } = {}) {
+  const raw = str(name);
+  if (!raw) return fallback;
+  const n = Number(raw);
+  if (!Number.isInteger(n) || n < min || n > max) {
+    errors.push(`${name} must be an integer between ${min} and ${max} (got "${raw}")`);
+    return fallback;
+  }
+  return n;
+}
+function bool(name, fallback) {
+  const raw = str(name).toLowerCase();
+  if (!raw) return fallback;
+  return ['1', 'true', 'yes', 'on'].includes(raw);
+}
+function list(name, fallback = []) {
+  const raw = str(name);
+  return raw ? raw.split(',').map((s) => s.trim()).filter(Boolean) : fallback;
+}
+function portRange(name, fallback) {
+  const raw = str(name, fallback);
+  const m = raw.match(/^(\d{1,5})\s*-\s*(\d{1,5})$/);
+  if (!m || Number(m[1]) > Number(m[2]) || Number(m[2]) > 65535) {
+    errors.push(`${name} must look like "${fallback}" (got "${raw}")`);
+    const [a, b] = fallback.split('-').map(Number);
+    return { min: a, max: b };
+  }
+  return { min: Number(m[1]), max: Number(m[2]) };
+}
+
+// ── SSH jump server (credential set #1) ─────────────────────────────────────
+const privateKeyPath = str('SSH_PRIVATE_KEY_PATH');
+const sshPassword = str('SSH_PASSWORD');
+let privateKey;
+if (privateKeyPath) {
+  try {
+    privateKey = fs.readFileSync(path.resolve(privateKeyPath));
+  } catch (e) {
+    errors.push(`SSH_PRIVATE_KEY_PATH could not be read: ${e.message}`);
+  }
+}
+if (!privateKeyPath && !sshPassword) errors.push('Set SSH_PASSWORD (or SSH_PRIVATE_KEY_PATH)');
+
+export const config = Object.freeze({
+  server: {
+    host: str('HOST', '0.0.0.0'),
+    port: int('PORT', 3000, { min: 1, max: 65535 }),
+    trustProxy: bool('TRUST_PROXY', false),
+    // Extra origins allowed to open terminal WebSockets (same-origin is always allowed)
+    allowedOrigins: list('ALLOWED_ORIGINS'),
+  },
+
+  diagramPath: path.resolve(str('DIAGRAM_PATH', './diagrams/diagram.drawio')),
+
+  ssh: {
+    host: required('SSH_HOST'),
+    port: int('SSH_PORT', 22, { min: 1, max: 65535 }),
+    username: required('SSH_USERNAME'),
+    password: sshPassword || undefined,
+    privateKey,
+    passphrase: str('SSH_KEY_PASSPHRASE') || undefined,
+    // "SHA256:…" as printed by `ssh-keygen -lf`; Strongly recommended: pins the
+    // jump server's identity and defeats man-in-the-middle attacks
+    hostFingerprint: str('SSH_HOST_FINGERPRINT'),
+    readyTimeoutMs: 15_000,
+    keepaliveIntervalMs: 15_000,
+  },
+
+  // ── Telnet console login (credential set #2) ──────────────────────────────
+  telnet: {
+    username: str('TELNET_USERNAME'),
+    password: str('TELNET_PASSWORD'),
+    autoLogin: bool('TELNET_AUTOLOGIN', true),
+    // Silence (ms) after telnet connects before one Enter is sent to wake an
+    // idle console; Never sent if a prompt is visible. 0 disables it
+    wakeIdleMs: int('TELNET_WAKE_IDLE_MS', 2500, { min: 0, max: 30_000 }),
+  },
+
+  consoles: {
+    // A label such as ".211 - 2001" resolves to `${networkPrefix}.211` port 2001
+    networkPrefix: str('CONSOLE_NETWORK_PREFIX', '10.22.9').replace(/\.$/, ''),
+    allowedHosts: list('ALLOWED_CONSOLE_HOSTS', ['10.22.9.211', '10.22.9.212']),
+    portRange: portRange('ALLOWED_PORT_RANGE', '2000-2099'),
+  },
+
+  // Admin switches (console devices outside the lab diagrams)
+  infraConfigPath: path.resolve(str('INFRA_CONFIG_PATH', './config/infrastructure.json')),
+
+  // ── Proxmox VE API (credential set #3, ticket authentication) ─────────────
+  // Reached only through the SSH jump server (config.ssh), never directly
+  proxmox: proxmoxConfig(),
+
+  limits: {
+    maxSessions: int('MAX_SESSIONS', 40, { min: 1, max: 1000 }),
+    maxSessionsPerClient: int('MAX_SESSIONS_PER_CLIENT', 6, { min: 1, max: 100 }),
+    idleTimeoutMs: int('IDLE_TIMEOUT_MINUTES', 60, { min: 1, max: 24 * 60 }) * 60_000,
+    opensPerMinute: 20, // per client IP; stops click-spam from hammering the jump host
+  },
+});
+
+function proxmoxConfig() {
+  const url = str('PROXMOX_URL').replace(/\/+$/, '');
+  if (!url) return { enabled: false };
+  if (!/^https:\/\/[^/]+$/.test(url)) errors.push('PROXMOX_URL must look like https://10.22.9.71:8006 (no path)');
+  const fingerprint = str('PROXMOX_FINGERPRINT').toUpperCase();
+  if (fingerprint && !/^([0-9A-F]{2}:){31}[0-9A-F]{2}$/.test(fingerprint)) {
+    errors.push('PROXMOX_FINGERPRINT must be a SHA-256 fingerprint like AB:CD:… (32 pairs)');
+  }
+  return {
+    enabled: true,
+    url,
+    username: required('PROXMOX_USERNAME'),
+    realm: str('PROXMOX_REALM', 'pam'),
+    password: required('PROXMOX_PASSWORD'),
+    fingerprint,
+  };
+}
+
+if (errors.length) {
+  console.error('\n✖ Invalid configuration:\n  - ' + errors.join('\n  - ') + '\n');
+  console.error('  Copy .env.example to .env and fill in the values.\n');
+  process.exit(1);
+}

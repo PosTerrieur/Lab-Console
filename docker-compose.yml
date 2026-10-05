@@ -1,0 +1,16 @@
+services:
+  lab-console:
+    build: .
+    image: lab-console:1
+    container_name: lab-console
+    env_file: .env
+    environment:
+      PORT: "3000"            # inside the container; publish another host port below if needed
+    ports:
+      - "${PORT:-3000}:3000"
+    volumes:
+      # Edit the diagram on the host: the app reloads it within seconds
+      - ./diagrams:/app/diagrams:ro
+      # Admin switches, VLAN catalog and (optionally) the Proxmox CA file
+      - ./config:/app/config:ro
+    restart: unless-stopped

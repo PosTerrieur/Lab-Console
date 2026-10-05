@@ -1,0 +1,29 @@
+{
+  "name": "lab-console",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Web platform giving students console access to physical lab equipment (SSH jump host -> Telnet console server)",
+  "type": "module",
+  "engines": {
+    "node": ">=20.12"
+  },
+  "scripts": {
+    "start": "node src/server.js",
+    "dev": "node --watch src/server.js",
+    "check-diagram": "node scripts/check-diagram.js",
+    "mock-lab": "node dev/mock-lab.js",
+    "test": "node --test test/*.test.js",
+    "mock-proxmox": "node dev/mock-proxmox.js"
+  },
+  "dependencies": {
+    "@fontsource/ibm-plex-mono": "^5.3.0",
+    "@fontsource/ibm-plex-sans": "^5.3.0",
+    "@novnc/novnc": "^1.7.0",
+    "@xmldom/xmldom": "^0.9.8",
+    "@xterm/addon-fit": "^0.11.0",
+    "@xterm/xterm": "^6.0.0",
+    "express": "^5.1.0",
+    "ssh2": "^1.17.0",
+    "ws": "^8.18.0"
+  }
+}
